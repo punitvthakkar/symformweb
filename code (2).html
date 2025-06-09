@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYMFORM-88</title>
+    <!-- FOSS Font: "Press Start 2P" -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <!-- FOSS CSS Library: NES.css (used sparingly for buttons/base) -->
+    <link href="https://unpkg.com/nes.css@2.3.0/css/nes.min.css" rel="stylesheet" />
+    <style>
+        /*
+            Symform-88 Restyle v2 - The Veteran's Custom Touch
+            ----------------------------------------------------
+            Critique addressed. Moving beyond library defaults to build a
+            proper, balanced, and custom UI dialog.
+        */
+
+        :root {
+            --bg-color: #0D1B2A;
+            --frame-color: #1B263B;
+            --border-color: #415A77;
+            --text-color: #E0FBFC;
+            --highlight-color: #FFD166;
+            --action-color: #E76F51;
+            --shadow-color: #0d121b; /* Darker shade for hard shadows */
+
+            --light-form-color: '#E0FBFC';
+            --dark-form-color: '#EE4266';
+            --barrier-color: '#778DA9';
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            font-family: 'Press Start 2P', cursive;
+            color: var(--text-color);
+            image-rendering: pixelated;
+        }
+
+        .game-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative; /* Needed for absolute positioning of the overlay */
+        }
+
+        canvas {
+            display: block;
+            background-color: var(--frame-color);
+        }
+
+        .game-active-cursor {
+            cursor: none;
+        }
+
+        /*
+        >> THE CUSTOM GAME OVER DIALOG <<
+        This is where the real work is. No more relying on the library's layout.
+        */
+        #gameOverlay {
+            position: absolute;
+            width: 90%;
+            max-width: 520px; /* A fixed max-width is key for good layout */
+            padding: 1.5rem 2rem;
+            background-color: var(--frame-color);
+            border: 4px solid var(--text-color);
+            box-shadow: 8px 8px 0px var(--shadow-color); /* Classic hard shadow */
+            
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* Center all content horizontally */
+            text-align: center;
+        }
+
+        #gameOverlay h1 {
+            font-size: 2.5em;
+            color: var(--highlight-color);
+            text-shadow: 3px 3px 0px var(--action-color);
+            margin-top: 0;
+            margin-bottom: 2rem;
+        }
+
+        /* Structure for stats */
+        .score-group, .stats-group {
+            width: 100%;
+            margin-bottom: 1.5rem;
+        }
+
+        .score-group p, .stats-group p {
+            margin: 0.75rem 0;
+            font-size: 1em;
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 320px; /* Constrain line width for readability */
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .score-group strong, .stats-group strong {
+            color: var(--highlight-color);
+            font-weight: normal;
+        }
+
+        /* The horizontal rule, a classic UI separator */
+        .divider {
+            border: none;
+            height: 2px;
+            background-color: var(--border-color);
+            width: 100%;
+            margin: 0.5rem 0 1.5rem 0;
+        }
+
+        .celebration-text {
+            color: var(--action-color) !important; /* Make it stand out */
+            font-size: 1.1em !important; /* Slightly larger */
+            justify-content: center !important; /* Center the celebration text */
+            animation: flash 0.5s infinite;
+        }
+
+        @keyframes flash {
+            0% { opacity: 1; transform: scale(1.05); }
+            50% { opacity: 0.7; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.05); }
+        }
+
+        #restartButton {
+            /* Using nes-btn for the base look, but positioning it ourselves */
+            margin-top: 1rem;
+            position: relative;
+        }
+        
+        #restartButton:hover::before {
+            content: '';
+            position: absolute;
+            left: -30px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 8 8"><path fill="%23FFD166" d="M0 0v8l4-4-4-4z" transform="translate(2)"/></svg>');
+            background-repeat: no-repeat;
+            background-size: contain;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 600px) {
+            #gameOverlay { padding: 1rem; max-width: 95%; }
+            #gameOverlay h1 { font-size: 1.8em; margin-bottom: 1.5rem; }
+            .score-group p, .stats-group p { font-size: 0.8em; }
+            .celebration-text { font-size: 0.9em !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- RESTRUCTURED HTML for the Game Over screen for proper layout -->
+        <div id="gameOverlay" class="hidden">
+            <h1>GAME OVER</h1>
+
+            <div class="score-group">
+                <p><span>FINAL SCORE</span> <strong id="finalScore">0</strong></p>
+                <p><span>SESSION HIGH</span> <strong id="sessionHighScoreVal">0</strong></p>
+                <p id="sessionHighMessage" class="hidden celebration-text">NEW SESSION HIGH!</p>
+                <p><span>ALL-TIME HIGH</span> <strong id="allTimeHighScoreVal">0</strong></p>
+                <p id="allTimeHighMessage" class="hidden celebration-text">NEW ALL-TIME HIGH!</p>
+            </div>
+
+            <hr class="divider">
+
+            <div class="stats-group">
+                <p><span>HIGHEST CHAIN</span> <strong id="highestChainVal">0</strong></p>
+                <p><span>NODES ABSORBED</span> <strong id="nodesAbsorbed">0</strong></p>
+                <p><span>TIME SURVIVED</span> <strong id="timeSurvived">0s</strong></p>
+            </div>
+
+            <button id="restartButton" class="nes-btn is-primary">Play Again</button>
+        </div>
+    </div>
+
+
+    <script>
+        /*
+            Symform - Inline JavaScript
+            JS is largely unchanged as the core logic is solid.
+            Minor tweaks for element handling.
+        */
+
+        // --- Canvas and Context Setup ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Game State Variables ---
+        let animationFrameId;
+        let isGameOver = false;
+        let score = 0;
+        let chainMultiplier = 1;
+        let highestChainInGame = 0;
+        let nodesAbsorbedCount = 0;
+        let startTime = 0;
+        let gameDuration = 0;
+
+        // --- High Score Tracking ---
+        const LOCAL_STORAGE_KEY_ALL_TIME_HIGH = 'symformAllTimeHigh';
+        let allTimeHighScore = 0;
+        let sessionHighScore = 0;
+
+        // --- Game Object Configuration ---
+        const GAME_CONFIG = {
+            FORM_RADIUS: 15,
+            NODE_RADIUS: 8,
+            NODE_SPAWN_INTERVAL_MS: 1500,
+            MIN_NODE_SPAWN_INTERVAL_MS: 300,
+            NODE_SPAWN_INTERVAL_DECREMENT_PER_SCORE: 10,
+            SCORE_FOR_BARRIERS: 50,
+            BARRIER_LINE_WIDTH: 4,
+            BARRIER_COLLISION_TOLERANCE: 2,
+            SCORE_PER_NODE: 10,
+            CHAIN_RESET_THRESHOLD_MS: 1500,
+            INITIAL_BARRIER_COUNT: 1,
+            MAX_BARRIER_COUNT: 5,
+        };
+        
+        // --- Player Forms ---
+        const lightform = { x: 0, y: 0, radius: GAME_CONFIG.FORM_RADIUS, color: '#E0FBFC', auraColor: 'rgba(224, 251, 252, 0.3)' };
+        const darkform = { x: 0, y: 0, radius: GAME_CONFIG.FORM_RADIUS, color: '#EE4266', auraColor: 'rgba(238, 66, 102, 0.3)' };
+
+        // --- Game Objects & State (Arrays, Timers, UI Elements) ---
+        const nodes = [];
+        let lastNodeSpawnTime = 0;
+        let currentSpawnInterval = GAME_CONFIG.NODE_SPAWN_INTERVAL_MS;
+        const barriers = [];
+        let barriersEnabled = false;
+        let lastNodeAbsorbedTime = 0;
+        let chainResetTimer;
+        const gameOverlay = document.getElementById('gameOverlay');
+        const finalScoreSpan = document.getElementById('finalScore');
+        const highestChainValSpan = document.getElementById('highestChainVal');
+        const nodesAbsorbedSpan = document.getElementById('nodesAbsorbed');
+        const timeSurvivedSpan = document.getElementById('timeSurvived');
+        const restartButton = document.getElementById('restartButton');
+        const sessionHighMessage = document.getElementById('sessionHighMessage');
+        const allTimeHighMessage = document.getElementById('allTimeHighMessage');
+        const sessionHighScoreValSpan = document.getElementById('sessionHighScoreVal');
+        const allTimeHighScoreValSpan = document.getElementById('allTimeHighScoreVal');
+        
+        // --- Vector Math and Collision Detection (Unchanged) ---
+        const Vec2 = function(x, y) { this.x = x || 0; this.y = y || 0; };
+        Vec2.prototype = { distSq: function(v) { let dx = v.x - this.x; let dy = v.y - this.y; return dx * dx + dy * dy; }, dist: function(v) { return Math.sqrt(this.distSq(v)); } };
+        function checkCircleCollision(c1, c2) { const dx = c1.x - c2.x; const dy = c1.y - c2.y; const d = Math.sqrt(dx * dx + dy * dy); return d < (c1.radius + c2.radius); }
+        function checkLineCircleCollision(line, circle) { const lS = new Vec2(line.x1, line.y1); const lE = new Vec2(line.x2, line.y2); const cC = new Vec2(circle.x, circle.y); const r = circle.radius + GAME_CONFIG.BARRIER_COLLISION_TOLERANCE; const lV = new Vec2(lE.x - lS.x, lE.y - lS.y); const pV = new Vec2(cC.x - lS.x, cC.y - lS.y); const lSq = lV.distSq(new Vec2(0, 0)); let t = 0; if (lSq !== 0) { t = (pV.x * lV.x + pV.y * lV.y) / lSq; } t = Math.max(0, Math.min(1, t)); const cP = new Vec2(lS.x + t * lV.x, lS.y + t * lV.y); const dSq = cP.distSq(cC); return dSq < r * r; }
+
+        // --- Initialization ---
+        function init() {
+            ctx.imageSmoothingEnabled = false;
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            restartButton.addEventListener('click', startGame);
+            window.addEventListener('keydown', handleKeyDown);
+            loadHighScores();
+            startGame();
+        }
+
+        // --- Game Start/Reset ---
+        function startGame() {
+            cancelAnimationFrame(animationFrameId); gameOverlay.classList.add('hidden');
+            sessionHighMessage.classList.add('hidden'); allTimeHighMessage.classList.add('hidden');
+            canvas.classList.add('game-active-cursor');
+            isGameOver = false; score = 0; chainMultiplier = 1; highestChainInGame = 0; nodesAbsorbedCount = 0;
+            nodes.length = 0; barriers.length = 0; barriersEnabled = false;
+            lastNodeSpawnTime = performance.now(); currentSpawnInterval = GAME_CONFIG.NODE_SPAWN_INTERVAL_MS;
+            startTime = performance.now(); gameDuration = 0; clearTimeout(chainResetTimer);
+            lightform.x = canvas.width / 2; lightform.y = canvas.height / 2;
+            updateDarkformPosition();
+            gameLoop(performance.now());
+        }
+
+        // --- Game Loop ---
+        let lastFrameTime = 0;
+        function gameLoop(currentTime) {
+            if (isGameOver) { showGameOverScreen(); return; }
+            update(currentTime); draw();
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- Update and Draw (Aesthetic changes already applied) ---
+        function update(currentTime) {
+            gameDuration = Math.floor((currentTime - startTime) / 1000);
+            if (currentTime - lastNodeSpawnTime > currentSpawnInterval) { spawnNode(); lastNodeSpawnTime = currentTime; currentSpawnInterval = Math.max(GAME_CONFIG.MIN_NODE_SPAWN_INTERVAL_MS, currentSpawnInterval - GAME_CONFIG.NODE_SPAWN_INTERVAL_DECREMENT_PER_SCORE); }
+            if (currentTime - lastNodeAbsorbedTime > GAME_CONFIG.CHAIN_RESET_THRESHOLD_MS && chainMultiplier > 1) { chainMultiplier = 1; clearTimeout(chainResetTimer); }
+            if (score >= GAME_CONFIG.SCORE_FOR_BARRIERS && !barriersEnabled) { barriersEnabled = true; spawnBarriers(GAME_CONFIG.INITIAL_BARRIER_COUNT); } else if (barriersEnabled && score >= GAME_CONFIG.SCORE_FOR_BARRIERS + (barriers.length * 20) && barriers.length < GAME_CONFIG.MAX_BARRIER_COUNT) { spawnBarriers(1); }
+            for (let i = nodes.length - 1; i >= 0; i--) { const n = nodes[i]; if (n.type === 'light') { if (checkCircleCollision(lightform, n)) { absorbNode(n); nodes.splice(i, 1); continue; } else if (checkCircleCollision(darkform, n)) { isGameOver = true; return; } } else if (n.type === 'dark') { if (checkCircleCollision(darkform, n)) { absorbNode(n); nodes.splice(i, 1); continue; } else if (checkCircleCollision(lightform, n)) { isGameOver = true; return; } } }
+            if (barriersEnabled) { for (const b of barriers) { if (checkLineCircleCollision(b, lightform) || checkLineCircleCollision(b, darkform)) { isGameOver = true; return; } } }
+        }
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = 'var(--barrier-color)'; ctx.lineWidth = GAME_CONFIG.BARRIER_LINE_WIDTH;
+            for (const b of barriers) { ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke(); }
+            for (const n of nodes) { ctx.beginPath(); ctx.arc(n.x, n.y, n.radius, 0, 2 * Math.PI); ctx.fillStyle = n.fillColor; ctx.fill(); ctx.strokeStyle = n.strokeColor; ctx.lineWidth = n.strokeWidth; ctx.stroke(); }
+            drawForm(darkform); drawForm(lightform);
+            ctx.fillStyle = 'var(--text-color)'; ctx.font = '16px "Press Start 2P"';
+            ctx.textAlign = 'left'; ctx.fillText(`SCORE:${String(score).padStart(6, '0')}`, 20, 30);
+            ctx.textAlign = 'right'; ctx.fillText(`CHAIN:x${chainMultiplier}`, canvas.width - 20, 30);
+        }
+        function drawForm(form) {
+            ctx.beginPath(); ctx.arc(form.x, form.y, form.radius + 4, 0, 2*Math.PI); ctx.fillStyle = form.auraColor; ctx.fill();
+            ctx.beginPath(); ctx.arc(form.x, form.y, form.radius, 0, 2*Math.PI); ctx.fillStyle = form.color; ctx.fill();
+        }
+
+        // --- Event Handlers & Game Logic (Unchanged) ---
+        function handleMouseMove(event) { const r = canvas.getBoundingClientRect(); lightform.x = Math.max(GAME_CONFIG.FORM_RADIUS, Math.min(canvas.width - GAME_CONFIG.FORM_RADIUS, event.clientX - r.left)); lightform.y = Math.max(GAME_CONFIG.FORM_RADIUS, Math.min(canvas.height - GAME_CONFIG.FORM_RADIUS, event.clientY - r.top)); updateDarkformPosition(); }
+        function updateDarkformPosition() { const cX = canvas.width / 2; const cY = canvas.height / 2; let mX = cX + (cX - lightform.x); let mY = cY + (cY - lightform.y); darkform.x = Math.max(GAME_CONFIG.FORM_RADIUS, Math.min(canvas.width - GAME_CONFIG.FORM_RADIUS, mX)); darkform.y = Math.max(GAME_CONFIG.FORM_RADIUS, Math.min(canvas.height - GAME_CONFIG.FORM_RADIUS, mY)); }
+        function resizeCanvas() { const cont = document.querySelector('.game-container'); canvas.width = cont.clientWidth; canvas.height = cont.clientHeight; if (!isGameOver) { updateDarkformPosition(); } }
+        function spawnNode() {
+            const type = Math.random() < 0.5 ? 'light' : 'dark';
+            let fillColor = type === 'light' ? lightform.color : darkform.color;
+            let strokeColor = type === 'light' ? '#0D1B2A' : lightform.color;
+            let x, y; do { x = Math.random() * (canvas.width - 2*GAME_CONFIG.NODE_RADIUS) + GAME_CONFIG.NODE_RADIUS; y = Math.random() * (canvas.height - 2*GAME_CONFIG.NODE_RADIUS) + GAME_CONFIG.NODE_RADIUS; } while (isPositionInsideBarrier(x, y, GAME_CONFIG.NODE_RADIUS) || isPositionInsideBarrier(canvas.width - x, canvas.height - y, GAME_CONFIG.NODE_RADIUS));
+            nodes.push({ x, y, radius: GAME_CONFIG.NODE_RADIUS, type, fillColor, strokeColor, strokeWidth: 2 });
+        }
+        function spawnBarriers(count) { for (let i=0; i<count; ++i) { let x1,y1,x2,y2; const minL=100; const maxL=Math.min(canvas.width,canvas.height)*0.7; const p=GAME_CONFIG.FORM_RADIUS*2+10; if(Math.random()<0.5){y1=y2=Math.random()*(canvas.height-2*p)+p;x1=Math.random()*(canvas.width-minL-2*p)+p;x2=x1+Math.random()*(maxL-minL)+minL;}else{x1=x2=Math.random()*(canvas.width-2*p)+p;y1=Math.random()*(canvas.height-minL-2*p)+p;y2=y1+Math.random()*(maxL-minL)+minL;} barriers.push({x1,y1,x2,y2}); } }
+        isPositionInsideBarrier = function(px, py, r) { const t = r + GAME_CONFIG.BARRIER_COLLISION_TOLERANCE; for(const b of barriers) { if (distToSegmentSquared(px,py,b.x1,b.y1,b.x2,b.y2) < t*t) return true; } return false; };
+        distToSegmentSquared = function(px,py,x1,y1,x2,y2){var l2=(x2-x1)*(x2-x1)+(y2-y1)*(y2-y1);if(l2==0)return (px-x1)*(px-x1)+(py-y1)*(py-y1);var t=((px-x1)*(x2-x1)+(py-y1)*(y2-y1))/l2;t=Math.max(0,Math.min(1,t));var dx=px-(x1+t*(x2-x1));var dy=py-(y1+t*(y2-y1));return dx*dx+dy*dy;};
+        function absorbNode() { nodesAbsorbedCount++; lastNodeAbsorbedTime = performance.now(); clearTimeout(chainResetTimer); chainMultiplier++; if (chainMultiplier > highestChainInGame) highestChainInGame = chainMultiplier; score += GAME_CONFIG.SCORE_PER_NODE * chainMultiplier; chainResetTimer = setTimeout(() => { if (!isGameOver) chainMultiplier = 1; }, GAME_CONFIG.CHAIN_RESET_THRESHOLD_MS); }
+        function showGameOverScreen() { cancelAnimationFrame(animationFrameId); gameOverlay.classList.remove('hidden'); canvas.classList.remove('game-active-cursor'); finalScoreSpan.textContent = score; highestChainValSpan.textContent = highestChainInGame; nodesAbsorbedSpan.textContent = nodesAbsorbedCount; timeSurvivedSpan.textContent = `${gameDuration}s`; if (score > sessionHighScore) { sessionHighScore = score; sessionHighMessage.classList.remove('hidden'); } else { sessionHighMessage.classList.add('hidden'); } if (score > allTimeHighScore) { allTimeHighScore = score; allTimeHighMessage.classList.remove('hidden'); saveAllTimeHighScore(); } else { allTimeHighMessage.classList.add('hidden'); } sessionHighScoreValSpan.textContent = sessionHighScore; allTimeHighScoreValSpan.textContent = allTimeHighScore; }
+        function loadHighScores() { try { const s = localStorage.getItem(LOCAL_STORAGE_KEY_ALL_TIME_HIGH); if(s) allTimeHighScore = parseInt(s, 10); } catch(e) { console.error(e); allTimeHighScore = 0;} sessionHighScore = 0; }
+        function saveAllTimeHighScore() { try { localStorage.setItem(LOCAL_STORAGE_KEY_ALL_TIME_HIGH, allTimeHighScore.toString()); } catch(e) { console.error(e); } }
+        function handleKeyDown(event) { if (isGameOver && (event.code === 'Space' || event.code === 'Enter')) { startGame(); event.preventDefault(); } }
+
+        // --- Start ---
+        window.onload = init;
+    </script>
+</body>
+</html>
